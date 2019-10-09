@@ -341,16 +341,22 @@ MsgQ::MsgQ(string my_chn_name, long timeout_usec)
 
 	m_err = 0;
 	mq_getattr(m_myChn, &attr);
-	m_message = "Message queue '" + my_chn_name 
+	m_message = "My message queue '" + my_chn_name 
 		+ "' is created with id=" + to_string(m_myChn) 
-		+ " for receiving, id=" + to_string(m_Channels[1]) 
-		+ " for sending internally. Now has " + to_string(attr.mq_curmsgs) 
-		+ "s messages in queue. The max message size is " + to_string(attr.mq_msgsize) 
-		+ ". The max number of messages on queue is " + to_string(attr.mq_maxmsg);
+		+ " for receiving.\nMessage queue 'main' is opened with id=" + to_string(m_Channels[1]) 
+		+ " for sending.\nMy queue currently has " + to_string(attr.mq_curmsgs) 
+		+ "s messages to be received in queue. \nThe max message size of my queue is " + to_string(attr.mq_msgsize) 
+		+ ". The max number of messages on my queue is " + to_string(attr.mq_maxmsg);
 }
 
 MsgQ::~MsgQ()
 {
+	// close all the message queue opened in this class before. The message queue is still in the kernel without been deleted.
+	for (int i = 1; i <= m_totalChannels; i++)
+	{
+		mq_close(m_Channels[i]);
+	}
+	mq_close(m_myChn);
 }
 
 // get the channel for message sending by its name. 

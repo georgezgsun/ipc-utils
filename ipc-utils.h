@@ -36,7 +36,12 @@ using namespace std;
 //		Multiple subscribers are allowed to read the same elements in different process/thread simutaneously.
 //	5.	Every module is allowed to have multiple publishers together with multiple subscribers. 
 //	6.	Each shared element always occupies the same location in the shared memory no matter how many times it is declared or loaded in the module.
-//	7.	The writing and reading are all operations that are non blocking and multithreaded safe.
+//	7.	The writing and reading to the shared memory are all operations that are non blocking, non locking, and multithreaded safe.
+//	8.	255 publishers can be created in this implementation, where each of them can have any data structure with a size less than 32K.
+//	9.	The total data of all elements can has a size also no more than 32K.
+//	10.	Each element is identified by its name in string for at most 15 characters. Refering the name in every process/thread will always has
+//		the same result.
+//	11.	The element published by a publisher will remain in the kernel even when the process is terminated.
 //
 
 // MsgQ class
@@ -53,8 +58,19 @@ using namespace std;
 //		or the timeout expires. The timeout can be specified between 10us to 1s.
 //  7. 	The sending of a message is also a blocking operation with timeout. It will block until either the message queue has available 
 //		space for the new message or a small 1ms timeout expires.
-//	8.	The receiving and the sending of message are all multithreaded safe.
-//
+//	8.	The receiving and the sending of message are all non locking and multithreaded safe.
+//	9.	The message queue will remain in the kernel even when the process that created it is terminated. All messages in the queue remains there.
+//	10. Each message queue is identified by its name in string with at most 8 characters. 
+//	11.	We introduce the concept of message channel here for the conience to distinguish the message sending and reading. They ocuppy different channels.
+// 
+
+// The preparation. We need to have several common directories setup and an environment variable LD_LIBRARY_PATH been created/setup.
+//	mkdir ~/projects
+//	mkdir ~/projects/common
+//	mkdir ~/projects/common/include
+//	mkdir ~/projects/common/lib
+//	export LD_LIBRARY_PATH=$HOME/projects/common/lib:$LD_LIBRARY_PATH
+
 struct shm_header
 {
 	uint16_t offset;
