@@ -37,8 +37,8 @@ ShMem::ShMem(string title)
 	//fprintf(stderr, "The shared memory has an ID of %d, ", m_fd);
 
 	// configure the total size of the shared memory object
-	int size_headers = MAX_ELEMENTS * sizeof(shm_header);
-	int size_names = MAX_ELEMENTS * 16;
+	int size_headers = MAX_PUBLISHERS * sizeof(shm_header);
+	int size_names = MAX_PUBLISHERS * 16;
 	int size_data = 65536;
 	m_size = size_headers + size_names + size_data; // total size of the headers, names, and data
 	//fprintf(stderr, "total size is %d\n", m_size);
@@ -74,15 +74,154 @@ ShMem::~ShMem()
 	munmap((void*)m_headers, m_size);
 }
 
+// publish new data with the publisher
+// @param PublisherName	the name of the shared element or publisher, 1-15 characters
+// @param size			the size of the shared element, 0-1024. 0 for string up to 63 characters
+// @param ptr			the pointer to the data
+// @return				the publisher ID, positive for success, negtive for error code.
+//						The publisher ID keeps unchanged for the same publisher name among all processes/threads.
+int ShMem::Write(string PublisherName, int size, void* ptr)
+{
+	int id = Subscribe(PublisherName);
+	
+	if (id > 0 && Write(id, ptr) < 0)
+	{
+		return m_err;
+	}
+	
+	return id;	
+}
+
+// publish new data in integer with the publisher
+// @param PublisherName	the name of the shared element or publisher, 1-15 characters
+// @param n				the data in integer to be published
+// @return				the publisher ID, positive for success, negtive for error code
+//						The publisher ID keeps unchanged for the same publisher name among all processes/threads.
+int ShMem::Write(string PublisherName, int n)
+{
+	int id = Subscribe(PublisherName);
+	
+	if (id > 0 && Write(id, &n) < 0)
+	{
+		return m_err;
+	}
+	
+	return id;	
+}
+
+// publish new data in double with the publisher
+// @param PublisherName	the name of the shared element or publisher, 1-15 characters
+// @param t				the data in double to be published
+// @return				the publisher ID, positive for success, negtive for error code
+//						The publisher ID keeps unchanged for the same publisher name among all processes/threads.
+int ShMem::Write(string PublisherName, double t)
+{
+	int id = Subscribe(PublisherName);
+	
+	if (id > 0 && Write(id, &t) < 0)
+	{
+		return m_err;
+	}
+	
+	return id;	
+}
+
+// publish new data in string with the publisher
+// @param PublisherName	the name of the shared element or publisher, 1-15 characters
+// @param s				the data in string to be published, 0-63 characters
+// @return				the publisher ID, positive for success, negtive for error code
+//						The publisher ID keeps unchanged for the same publisher name among all processes/threads.
+int ShMem::Write(string PublisherName, string s)
+{
+	int id = Subscribe(PublisherName);
+	
+	if (id > 0 && Write(id, &s) < 0)
+	{
+		return m_err;
+	}
+	
+	return id;	
+} 
+	
+// Read the shared element
+// @param PublisherName	the name of the shared element or publisher, 1-15 characters
+// @param len (out)		the size of the shared element, 0-1024. 0 for string up to 63 characters
+// @param ptr (out)		the pointer to the data read
+// @return				the publisher ID, positive for success, negtive for error code
+//						The publisher ID keeps unchanged for the same publisher name among all processes/threads.
+int ShMem::Read(string PublisherName, int* len, void* ptr)
+{
+	int id = Subscribe(PublisherName);
+	if (id > 0)
+	{
+		*len = Read(id, ptr);
+		
+		if (*len < 0)
+		{
+			return *len;
+		}
+	}
+	
+	return id;
+}
+
+// Read the shared element in integer
+// @param PublisherName	the name of the shared element or publisher, 1-15 characters
+// @param n (out)		the pointer to the integer read
+// @return				the publisher ID, positive for success, negtive for error code
+//						The publisher ID keeps unchanged for the same publisher name among all processes/threads.
+int ShMem::Read(string PublisherName, int* n)
+{
+	int id = Subscribe(PublisherName);
+	if (id > 0 && Read(id, n) < 0)
+	{
+		id = -1;
+	}
+	
+	return id;
+}
+	
+// Read the shared element in double
+// @param PublisherName	the name of the shared element or publisher, 1-15 characters
+// @param t (out)		the pointer to the double read
+// @return				the publisher ID, positive for success, negtive for error code
+//						The publisher ID keeps unchanged for the same publisher name among all processes/threads.
+int ShMem::Read(string PublisherName, double* t)
+{
+	int id = Subscribe(PublisherName);
+	if (id > 0 && Read(id, t) < 0)
+	{
+		id = -1;
+	}
+	
+	return id;
+}
+
+// Read the shared element in string
+// @param PublisherName	the name of the shared element or publisher, 1-15 characters
+// @param s (out)		the pointer to the string read
+// @return				the publisher ID, positive for success, negtive for error code
+//						The publisher ID keeps unchanged for the same publisher name among all processes/threads.
+int ShMem::Read(string PublisherName, string* s)
+{
+	int id = Subscribe(PublisherName);
+	if (id > 0 && Read(id, s) < 0)
+	{
+		id = -1;
+	}
+	
+	return id;
+}
+	
 // create a publisher
-// @param name	the name of the shared element
-// @param size	the size of the shared element
-// return the element ID, 	positive for the valid element ID in current module, negative for error code. 0 is reserved. 
-//							In case there already exists the element with the same name, its ID is reused.
-int ShMem::CreatePublisher(string name, int size)
+// @param PublisherName	the name of the shared element
+// @param size			the size of the shared element
+// @return				the publisher ID, positive for success, negtive for error code
+//						The publisher ID keeps unchanged for the same publisher name among all processes/threads.
+int ShMem::CreatePublisher(string PublisherName, int size)
 {
 	// check the name length
-	if (name.length() == 0 || name.length() > 15)
+	if (PublisherName.length() == 0 || PublisherName.length() > 15)
 	{
 		m_err = -1;
 		m_message = "invalid length of name";
@@ -99,38 +238,30 @@ int ShMem::CreatePublisher(string name, int size)
 
 	// check and wait till the headers is unlocked
 	unsigned int usecs = 0; // sleep time in us
-	while (m_headers[0].offset >= MAX_ELEMENTS)
+	while (m_headers[0].offset >= MAX_PUBLISHERS)
 	{
 		usecs += 100;
 		if (usecs > 500)
 		{
-			//fprintf(stderr, "the header is locked as %d %d\n", m_headers[0].offset, m_headers[0].size);
 			m_headers[0].offset &= 0xFF; // unlock the header
 			m_err = -1;
 			m_message = "others locked the headers";
-			//fprintf(stderr, "the header is unlocked as %d %d\n", m_headers[0].offset, m_headers[0].size);
-			//return m_err;
 		}
-		usleep(usecs);  // sleep for a little while
-		//fprintf(stderr, "sleep for %dus to wait the unlock of the header\n", usecs);
+		usleep(usecs);  // sleep for a little while to wait for unlock
 	}
+
+	// lock the header
+	m_headers[0].offset |= 0xFF00;
 
 	// now starts to add the element into the sharing
 	uint16_t total_elements = m_headers[0].offset & 0xFF;
 	uint16_t offset = m_headers[0].size; // the offset is the second 16bits
 	uint16_t u_size = static_cast<uint16_t>(size);
 
-	//fprintf(stderr, "Number of sharing: %d, offset %d\n", total_elements, offset);
-
-	// lock the header
-	m_headers[0].offset |= 0xFF00;
-
 	// check if the elements has been create before
 	for (uint16_t i = 1; i < total_elements; i++)
 	{
-		//fprintf(stderr, "[%d] %s (%d, %d)\n", i, m_names[i], m_headers[i].offset, m_headers[i].size);
-
-		if (strcmp(m_names[i], name.c_str()) == 0)
+		if (strcmp(m_names[i], PublisherName.c_str()) == 0)
 		{
 			if (u_size <= m_headers[i].size)
 			{
@@ -157,44 +288,34 @@ int ShMem::CreatePublisher(string name, int size)
 		return m_err;
 	}
 
-	//fprintf(stderr, "Add a new publisher %s. Now have total %d publishers with total size of %d.\n", 
-	//	name.c_str(), total_elements, temp_size); 
-
-	strcpy(m_names[total_elements], name.c_str()); // add the name to the name list
+	strcpy(m_names[total_elements], PublisherName.c_str()); // add the name to the name list
 	m_headers[total_elements].offset = offset; // update the offset of the element
 	m_headers[total_elements].size = u_size; // update the size of the element
 	m_headers[0].size = temp_size;  // modify the default offset
 	m_headers[0].offset = total_elements; // increment the element counter and unlock the header
-
-	//fprintf(stderr, "After modification.\n");
-	//for (uint16_t i = 0; i < total_elements; i++)
-	//{
-	//	fprintf(stderr, "[%d] %s (%d, %d)\n", i, m_names[i], m_headers[i].offset, m_headers[i].size);
-	//}
 
 	m_err = 0;
 	m_message = "new sharing added";
 	return total_elements;
 }
 
-
-// subscribe a publisher
-// @param name 	the name of the element that shall subscribe from
-// return the element ID, positive for the valid element ID, negative for error code. 
-int ShMem::Subscribe(string name)
+// subscribe a publisher or get the publisher id by name
+// @param PublisherName	the name of the shared element
+// @return				the publisher ID, positive for success, negtive for error code
+//						The publisher ID keeps unchanged for the same publisher name among all processes/threads.
+int ShMem::Subscribe(string PublisherName)
 {
 	uint16_t total_elements = m_headers[0].offset & 0xFF;
 
 	// check if the elements has been create before
 	for (uint16_t i = 1; i < total_elements; i++)
 	{
-		if (strcmp(m_names[i], name.c_str()) == 0)
+		if (strcmp(m_names[i], PublisherName.c_str()) == 0)
 		{
 			m_err = 0;
 			m_message = "found the element";
 			return i; // reuse the previouse 
 		}
-		fprintf(stderr, "%d: %s \n", i, m_names[i]);
 	}
 
 	m_err = -1;
@@ -203,23 +324,23 @@ int ShMem::Subscribe(string name)
 }
 
 // update the shared element with new data
-// @param 	ElementID	the id of the element that is going to be updated
+// @param PublisherID	the ID of the shared element or publisher, 1-256
 // @param 	p			the pointer point to the buffer of the new data
 // @return				the bytes actually write, positive on success, negtive for error code
-int ShMem::Write(int ElementID, void* p)
+int ShMem::Write(int PublisherID, void* p)
 {
 	uint16_t total_elements = m_headers[0].offset & 0xFF;
 
-	if (ElementID == 0 || ElementID > total_elements)
+	if (PublisherID == 0 || PublisherID > total_elements)
 	{
 		m_err = -1;
 		m_message = "element ID is out of range";
 		return m_err;
 	}
 
-	size_t size = static_cast<size_t>(m_headers[ElementID].size);
-	uint16_t offset = m_headers[ElementID].offset ^ 0x8000; // write the data to the opposite offset
-	//fprintf(stderr, "the offset for reading is %d, for writing is %d\n", m_headers[ElementID].offset, offset);
+	size_t size = static_cast<size_t>(m_headers[PublisherID].size);
+	uint16_t offset = m_headers[PublisherID].offset ^ 0x8000; // write the data to the opposite offset
+	//fprintf(stderr, "the offset for reading is %d, for writing is %d\n", m_headers[PublisherID].offset, offset);
 
 	//check if it is a string type
 	if (size)
@@ -237,30 +358,31 @@ int ShMem::Write(int ElementID, void* p)
 
 		//fprintf(stderr, "now the new string is %s", (char*)(m_data + offset));
 	}
-	m_headers[ElementID].offset = offset; // revert the ping-pong flag
+	m_headers[PublisherID].offset = offset; // revert the ping-pong flag
 
 	m_err = 0;
 	m_message = "element is updated";
-	return m_headers[ElementID].size;
+	return m_headers[PublisherID].size;
 }
 
+
 // Read the shared element
-// @param 	ElementID	the id of the element that is going to be read
-// @param 	p			the pointer point to the buffer of the read data
+// @param PublisherID	the ID of the shared element or publisher, 1-256
+// @param p				the pointer point to the buffer of the read data
 // @return				the bytes actually read, positive on success, negtive for error code
-int ShMem::Read(int ElementID, void* p)
+int ShMem::Read(int PublisherID, void* p)
 {
 	uint16_t total_elements = m_headers[0].offset & 0xFF; // the 
 
-	if (ElementID == 0 || ElementID > total_elements)
+	if (PublisherID == 0 || PublisherID > total_elements)
 	{
 		m_err = -1;
 		m_message = "element ID is out of range";
 		return m_err;
 	}
 
-	size_t size = static_cast<size_t>(m_headers[ElementID].size);
-	uint16_t offset = m_headers[ElementID].offset; // the offset of the data according to the ping-pong flag
+	size_t size = static_cast<size_t>(m_headers[PublisherID].size);
+	uint16_t offset = m_headers[PublisherID].offset; // the offset of the data according to the ping-pong flag
 	if (size)
 	{
 		memcpy(p, m_data + offset, size);  // read the data other than string
@@ -272,7 +394,7 @@ int ShMem::Read(int ElementID, void* p)
 
 	m_err = 0;
 	m_message = "";
-	return m_headers[ElementID].size;
+	return m_headers[PublisherID].size;
 }
 
 // get the error message of last operation
@@ -336,6 +458,7 @@ MsgQ::MsgQ(string my_chn_name, long timeout_usec)
 	m_totalChannels = 1;
 	m_Channels[1] = mq_open("/main", O_WRONLY | O_NONBLOCK);
 	strcpy((char*)m_ChnNames, my_chn_name.c_str()); // assign m_ChnNames[0], the /0 of a 8 characters is taken care of
+	my_chn_name.assign((char*)m_ChnNames);
 	strcpy((char*)(m_ChnNames + 1), "main");
 	m_myChnName = m_ChnNames[0];
 
@@ -362,7 +485,7 @@ MsgQ::~MsgQ()
 // get the channel for message sending by its name. 
 // @param	chn_name	the name of the channel, 1-8 characters
 // @return	the channel ID	number greater than 1, 1 is reserved for main, negtive for error code
-int MsgQ::GetChannelForSending(string chn_name)
+int MsgQ::GetDestChannel(string chn_name)
 {
 	if (chn_name.empty() || chn_name.length() > 8)
 	{
@@ -426,12 +549,13 @@ string MsgQ::GetChannelName(int channel)
 	return m_message;
 }
 
-// try to receive a message
-// @param sender (out)	the sender name, 1-8 characters
-// @param len (out)		the length of the message data, 0-1024
-// @param data (out)	the pointer to the buffer that holds the message data
-// @return				the message type, can be MSG_NULL (0), MSG_DATA (1), MSG_COMMAND (6), ..., negtive for error code
-int MsgQ::ReceiveMsg(int* senderChn, int* len, void* data)
+// receive a message sent to me
+// @param SenderName (out)	the sender name in string, 1-15 characters
+// @param type (out)		the type of the message, can be MSG_NULL (0), MSG_DATA (1), MSG_COMMAND (6), ...
+// @param len (out)			the length of the message data, 0-1024
+// @param data (out)		the pointer to the received data without message header
+// @return					the sender channel, positive for success, negtive for error code
+int MsgQ::ReceiveMsg(string* SenderName, int* type, int* len, void* data)
 {
 	*len = 0;
 	timespec timeout;
@@ -439,11 +563,9 @@ int MsgQ::ReceiveMsg(int* senderChn, int* len, void* data)
 	usec += chrono::duration_cast<chrono::microseconds>(chrono::high_resolution_clock::now().time_since_epoch()).count();
 	timeout.tv_sec = usec / 1000000L;
 	timeout.tv_nsec = (usec - timeout.tv_sec * 1000000L) * 1000;
-	//printf("timeout %lds+%ldns timeout=%dus\n", timeout.tv_sec, timeout.tv_nsec, m_timeout);
 
 	// read the message queue
 	m_err = mq_timedreceive(m_myChn, (char *)&receive_buf, 8192, 0, &timeout);
-
 	if (m_err < 0)
 	{
 		if (errno == EAGAIN)
@@ -478,24 +600,22 @@ int MsgQ::ReceiveMsg(int* senderChn, int* len, void* data)
 
 	// got a message, parses it
 	m_ChnNames[0] = receive_buf.name;
+	m_message.assign((char *)&receive_buf);
+	SenderName->assign((char *)&receive_buf); // the time stamp has a /0 in the front 
 	m_ts = receive_buf.ts;
 	*len = receive_buf.len;
-	int type = receive_buf.type;
+	*type = receive_buf.type;
 	memcpy(data, receive_buf.buf, receive_buf.len);
-	//*data = static_cast<void*>(receive_buf.buf);
 
 	usec = timeout.tv_nsec / 1000;
 	usec = m_ts > usec ? 1000000L + usec - m_ts : usec -m_ts;
-	//printf("Got a message dt=%ldus.\n", usec);
 
 	for (int i = 1; i < m_totalChannels + 1; i++)
 	{
 		if (m_ChnNames[i] == m_ChnNames[0])
 		{
 			m_Channels[0] = m_Channels[i];
-			*senderChn = i;
-			m_message.assign((char *)m_ChnNames);
-			return type;
+			return i;
 		}
 	}
 
@@ -505,24 +625,38 @@ int MsgQ::ReceiveMsg(int* senderChn, int* len, void* data)
 	buffer[0] = '/';
 	memcpy(buffer + 1, m_ChnNames, sizeof(uint64_t));
 
-	//printf("New sender (%ld, %s) is found.\n", receive_buf.name, m_ChnNames);
 	m_Channels[0] = mq_open(buffer, O_WRONLY | O_NONBLOCK);
 	m_totalChannels++;
 	m_ChnNames[m_totalChannels] = m_ChnNames[0];
 	m_Channels[m_totalChannels] = m_Channels[0];
-	m_message = "new sender ";
-	m_message.append((char*)m_ChnNames);
-	*senderChn = m_totalChannels;
-	return type;
+	m_message = "new sender " + m_message;
+	return m_totalChannels;
 }
 
-// send a message
-// @param destChn	the destnation channel, 0 for reply to last sender, 1 for main
+// send a message to the destnation
+// @param DestName	the destnation name, empty for reply to the last sender
 // @param type		the type of the message, for example MSG_COMMAND (6)
 // @param len		the length of the message net data, can be 0 or positive
 // @param data		the pointer to the data to be sent, can be NULL in case len is 0
-// @return			number of bytes been sent, positive for success, negtive for error code
-int MsgQ::SendMsg(int destChn, int type, int len, void* data)
+// @return			the destnation channel, positive for success, negtive for error code
+int MsgQ::SendMsg(string DestName, int type, int len, void* data)
+{
+	int chn = GetDestChannel(DestName);
+	if (chn > 0 && SendMsg(chn, type, len, data) < 0)
+	{
+		return -1;
+	}
+	
+	return chn;
+}
+
+// send a message to the destnation
+// @param DestChn	the destnation channel, 0 for reply to last sender, 1 for main
+// @param type		the type of the message, for example MSG_COMMAND (6)
+// @param len		the length of the message net data, can be 0 or positive
+// @param data		the pointer to the data to be sent, can be NULL in case len is 0
+// @return			bytes of data actually sent, positive for success, negtive for error code.
+int MsgQ::SendMsg(int DestChn, int type, int len, void* data)
 {
 	if (type <= 0 || type > 255)
 	{
@@ -538,7 +672,7 @@ int MsgQ::SendMsg(int destChn, int type, int len, void* data)
 		return m_err;
 	}
 
-	if (destChn < 0 || destChn > m_totalChannels)
+	if (DestChn < 0 || DestChn > m_totalChannels)
 	{
 		m_err = -3;
 		m_message = "invalid dest ID";
@@ -561,9 +695,11 @@ int MsgQ::SendMsg(int destChn, int type, int len, void* data)
 	send_buf.name = m_myChnName;
 	send_buf.type = type;
 	send_buf.len = len;
+	printf("%d: (name=%ld, ts=%d, type=%d, len=%d) \n", len, send_buf.name, send_buf.ts, send_buf.type, send_buf.len);
 	memcpy(send_buf.buf, data, len);
 	len += sizeof(send_buf) - MAX_MESSAGELENGTH;
-	m_err = mq_timedsend(m_Channels[destChn], (const char*)&send_buf, len, 0, &timeout);
+
+	m_err = mq_timedsend(m_Channels[DestChn], (const char*)&send_buf, len, 0, &timeout);
 	if (m_err < 0)
 	{
 		if (errno == EAGAIN)
@@ -599,8 +735,9 @@ int MsgQ::SendMsg(int destChn, int type, int len, void* data)
 	}
 
 	m_err = len;
-	m_message = "message sent to ";
-	m_message.append((char*)(m_ChnNames + destChn));
+	m_message = "message (type=" + to_string(send_buf.type) + ", len=" + to_string(send_buf.len) + ") was sent to ";
+	m_message.append((char*)(m_ChnNames + DestChn));
+	m_message.append(" at channel " + to_string(m_Channels[DestChn]) + " with size=" + to_string(len));
 	return m_err;
 }
 
