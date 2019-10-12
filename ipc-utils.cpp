@@ -9,6 +9,7 @@ ShMem::ShMem()
 	m_title = "Roswell";
 	m_fd = -1;
 	m_size = 0;
+	memset(m_publishers, 0, sizeof(m_publishers));
 
 	m_err = 0;
 	m_message = "";
@@ -61,10 +62,9 @@ ShMem::ShMem(string title)
 		m_err = strlen(m_names[0]);
 		//fprintf(stderr, "new title length %d\n", m_err);
 	}
-	//else
-	//{
-	//	fprintf(stderr, "Shared memory has been setup before using title %s.\n", m_names[0]);
-	//}
+
+	// clear all the publishes
+	memset(m_publishers, 0, sizeof(m_publishers));
 
 	m_message.assign(m_names[0]);
 }
@@ -74,75 +74,6 @@ ShMem::~ShMem()
 	munmap((void*)m_headers, m_size);
 }
 
-// publish new data with the publisher
-// @param PublisherName	the name of the shared element or publisher, 1-15 characters
-// @param size			the size of the shared element, 0-1024. 0 for string up to 63 characters
-// @param ptr			the pointer to the data
-// @return				the publisher ID, positive for success, negtive for error code.
-//						The publisher ID keeps unchanged for the same publisher name among all processes/threads.
-int ShMem::Write(string PublisherName, int size, void* ptr)
-{
-	int id = Subscribe(PublisherName);
-	
-	if (id > 0 && Write(id, ptr) < 0)
-	{
-		return m_err;
-	}
-	
-	return id;	
-}
-
-// publish new data in integer with the publisher
-// @param PublisherName	the name of the shared element or publisher, 1-15 characters
-// @param n				the data in integer to be published
-// @return				the publisher ID, positive for success, negtive for error code
-//						The publisher ID keeps unchanged for the same publisher name among all processes/threads.
-int ShMem::Write(string PublisherName, int n)
-{
-	int id = Subscribe(PublisherName);
-	
-	if (id > 0 && Write(id, &n) < 0)
-	{
-		return m_err;
-	}
-	
-	return id;	
-}
-
-// publish new data in double with the publisher
-// @param PublisherName	the name of the shared element or publisher, 1-15 characters
-// @param t				the data in double to be published
-// @return				the publisher ID, positive for success, negtive for error code
-//						The publisher ID keeps unchanged for the same publisher name among all processes/threads.
-int ShMem::Write(string PublisherName, double t)
-{
-	int id = Subscribe(PublisherName);
-	
-	if (id > 0 && Write(id, &t) < 0)
-	{
-		return m_err;
-	}
-	
-	return id;	
-}
-
-// publish new data in string with the publisher
-// @param PublisherName	the name of the shared element or publisher, 1-15 characters
-// @param s				the data in string to be published, 0-63 characters
-// @return				the publisher ID, positive for success, negtive for error code
-//						The publisher ID keeps unchanged for the same publisher name among all processes/threads.
-int ShMem::Write(string PublisherName, string s)
-{
-	int id = Subscribe(PublisherName);
-	
-	if (id > 0 && Write(id, &s) < 0)
-	{
-		return m_err;
-	}
-	
-	return id;	
-} 
-	
 // Read the shared element
 // @param PublisherName	the name of the shared element or publisher, 1-15 characters
 // @param len (out)		the size of the shared element, 0-1024. 0 for string up to 63 characters
@@ -268,6 +199,7 @@ int ShMem::CreatePublisher(string PublisherName, int size)
 				m_err = 0;
 				m_message = "found valid previously shared element";
 				m_headers[0].offset &= 0x00FF; // unlock the header
+				m_publishers[i] = true;
 				return i; // reuse the previouse 
 			}
 			m_err = -1;
@@ -292,10 +224,12 @@ int ShMem::CreatePublisher(string PublisherName, int size)
 	m_headers[total_elements].offset = offset; // update the offset of the element
 	m_headers[total_elements].size = u_size; // update the size of the element
 	m_headers[0].size = temp_size;  // modify the default offset
-	m_headers[0].offset = total_elements; // increment the element counter and unlock the header
-
+	m_publishers[total_elements] = true;
+	
 	m_err = 0;
 	m_message = "new sharing added";
+	
+	m_headers[0].offset = total_elements; // increment the element counter and unlock the header
 	return total_elements;
 }
 
@@ -323,11 +257,11 @@ int ShMem::Subscribe(string PublisherName)
 	return m_err;
 }
 
-// update the shared element with new data
+// publish new data with the publisher
 // @param PublisherID	the ID of the shared element or publisher, 1-256
-// @param 	p			the pointer point to the buffer of the new data
-// @return				the bytes actually write, positive on success, negtive for error code
-int ShMem::Write(int PublisherID, void* p)
+// @param ptr			the pointer to the data to be published
+// @return				the actual bytes of data written, positive for success, negtive for error code.
+int ShMem::Write(int PublisherID, void* ptr)
 {
 	uint16_t total_elements = m_headers[0].offset & 0xFF;
 
@@ -335,6 +269,13 @@ int ShMem::Write(int PublisherID, void* p)
 	{
 		m_err = -1;
 		m_message = "element ID is out of range";
+		return m_err;
+	}
+	
+	if (!m_publishers[PublisherID])
+	{
+		m_err = -2;
+		m_message = "not authorized to publish data at " + to_string(PublisherID) + " in this process";
 		return m_err;
 	}
 
@@ -345,16 +286,16 @@ int ShMem::Write(int PublisherID, void* p)
 	//check if it is a string type
 	if (size)
 	{
-		memcpy(m_data + offset, p, size);  // copy the data to the destination
+		memcpy(m_data + offset, ptr, size);  // copy the data to the destination
 	}
 	else
 	{
-		if (static_cast<string*>(p)->length() > 63)
+		if (static_cast<string*>(ptr)->length() > 63)
 		{
 			m_message = "string too long";
-			static_cast<string*>(p)->assign(static_cast<string*>(p)->substr(0, 63));
+			static_cast<string*>(ptr)->assign(static_cast<string*>(ptr)->substr(0, 63));
 		}
-		strcpy((char*)(m_data + offset), static_cast<string*>(p)->c_str());
+		strcpy((char*)(m_data + offset), static_cast<string*>(ptr)->c_str());
 
 		//fprintf(stderr, "now the new string is %s", (char*)(m_data + offset));
 	}
@@ -365,12 +306,62 @@ int ShMem::Write(int PublisherID, void* p)
 	return m_headers[PublisherID].size;
 }
 
+// publish new data in integer with the publisher
+// @param PublisherID	the ID of the shared element or publisher, 1-256
+// @param n				the data in integer to be published
+// @return				the actual bytes of data written, positive for success, negtive for error code.
+int ShMem::Write(int PublisherID, int n)
+{
+	size_t size = static_cast<size_t>(m_headers[PublisherID].size);
+	if (size == sizeof(n))
+	{
+		return Write(PublisherID, &n);
+	}
+	
+	m_err = -1;
+	m_message = "shared element is not an integer";
+	return m_err;
+}
+
+// publish new data in double with the publisher
+// @param PublisherID	the ID of the shared element or publisher, 1-256
+// @param t				the data in double to be published
+// @return				the actual bytes of data written, positive for success, negtive for error code.
+int ShMem::Write(int PublisherID, double t)
+{
+	size_t size = static_cast<size_t>(m_headers[PublisherID].size);
+	if (size == sizeof(t))
+	{
+		return Write(PublisherID, &t);
+	}
+	
+	m_err = -1;
+	m_message = "shared element is not a double";
+	return m_err;
+}
+
+// publish new data in string with the publisher
+// @param PublisherID	the ID of the shared element or publisher, 1-256
+// @param s				the data in string to be published, 0-63 characters
+// @return				the actual bytes of data written, positive for success, negtive for error code.
+int ShMem::Write(int PublisherID, string s)
+{
+	size_t size = static_cast<size_t>(m_headers[PublisherID].size);
+	if (size == 0)
+	{
+		return Write(PublisherID, &s);
+	}
+	
+	m_err = -1;
+	m_message = "shared element is not a string";
+	return -1;
+}
 
 // Read the shared element
 // @param PublisherID	the ID of the shared element or publisher, 1-256
-// @param p				the pointer point to the buffer of the read data
-// @return				the bytes actually read, positive on success, negtive for error code
-int ShMem::Read(int PublisherID, void* p)
+// @param ptr (out)		the pointer to the data read
+// @return				the actual bytes of data read, positive for success, negtive for error code.
+int ShMem::Read(int PublisherID, void* ptr)
 {
 	uint16_t total_elements = m_headers[0].offset & 0xFF; // the 
 
@@ -385,16 +376,108 @@ int ShMem::Read(int PublisherID, void* p)
 	uint16_t offset = m_headers[PublisherID].offset; // the offset of the data according to the ping-pong flag
 	if (size)
 	{
-		memcpy(p, m_data + offset, size);  // read the data other than string
+		memcpy(ptr, m_data + offset, size);  // read the data other than string
 	}
 	else
 	{
-		static_cast<string*>(p)->assign((char*)m_data + offset);  // read string
+		static_cast<string*>(ptr)->assign((char*)m_data + offset);  // read string
 	}
 
 	m_err = 0;
 	m_message = "";
 	return m_headers[PublisherID].size;
+}
+
+// Read the shared element
+// @param PublisherID	the ID of the shared element or publisher, 1-256
+// @param n (out)		the pointer to the integer read
+// @return				the actual bytes of data read, positive for success, negtive for error code.
+int ShMem::Read(int PublisherID, int* n)
+{
+	uint16_t total_elements = m_headers[0].offset & 0xFF; // the 
+
+	if (PublisherID == 0 || PublisherID > total_elements)
+	{
+		m_err = -1;
+		m_message = "element ID is out of range";
+		return m_err;
+	}
+
+	size_t size = static_cast<size_t>(m_headers[PublisherID].size);
+	if (size != sizeof(int))
+	{
+		m_err = -1;
+		m_message = "shared element is not an integer";
+		return m_err;
+	}
+	
+	uint16_t offset = m_headers[PublisherID].offset; // the offset of the data according to the ping-pong flag
+	memcpy(n, m_data + offset, size);
+
+	m_err = 0;
+	m_message = "";
+	return m_err;
+}
+
+// Read the shared element
+// @param PublisherID	the ID of the shared element or publisher, 1-256
+// @param t (out)		the pointer to the double read
+// @return				the actual bytes of data read, positive for success, negtive for error code.
+int ShMem::Read(int PublisherID, double* t)
+{
+	uint16_t total_elements = m_headers[0].offset & 0xFF; // the 
+
+	if (PublisherID == 0 || PublisherID > total_elements)
+	{
+		m_err = -1;
+		m_message = "element ID is out of range";
+		return m_err;
+	}
+
+	size_t size = static_cast<size_t>(m_headers[PublisherID].size);
+	if (size != sizeof(double))
+	{
+		m_err = -1;
+		m_message = "shared element is not a double";
+		return m_err;
+	}
+	
+	uint16_t offset = m_headers[PublisherID].offset; // the offset of the data according to the ping-pong flag
+	memcpy(t, m_data + offset, size);
+
+	m_err = 0;
+	m_message = "";
+	return m_err;
+}
+
+// Read the shared element
+// @param PublisherID	the ID of the shared element or publisher, 1-256
+// @param s (out)		the pointer to the string read
+// @return				the actual bytes of data read, positive for success, negtive for error code.
+int ShMem::Read(int PublisherID, string* s)
+{
+	uint16_t total_elements = m_headers[0].offset & 0xFF; // the 
+
+	if (PublisherID == 0 || PublisherID > total_elements)
+	{
+		m_err = -1;
+		m_message = "element ID is out of range";
+		return m_err;
+	}
+
+	if (static_cast<size_t>(m_headers[PublisherID].size))
+	{
+		m_err = -1;
+		m_message = "shared element is not a string";
+		return m_err;
+	}
+	
+	uint16_t offset = m_headers[PublisherID].offset; // the offset of the data according to the ping-pong flag
+	s->assign((char*)m_data + offset);  // read string
+
+	m_err = 0;
+	m_message = "";
+	return m_err;
 }
 
 // get the error message of last operation
@@ -650,6 +733,15 @@ int MsgQ::SendMsg(string DestName, int type, int len, void* data)
 	return chn;
 }
 
+// send a command to the destnation
+// @param DestName	the destnation name, empty for reply to the last sender
+// @param n			the integer data to be sent
+// @return			the destnation channel, positive for success, negtive for error code
+int MsgQ::SendCmd(string DestName, string s)
+{
+	return SendMsg(DestName, MSG_COMMAND, s.length() + 1, (void *)s.c_str());
+}
+
 // send a message to the destnation
 // @param DestChn	the destnation channel, 0 for reply to last sender, 1 for main
 // @param type		the type of the message, for example MSG_COMMAND (6)
@@ -741,6 +833,15 @@ int MsgQ::SendMsg(int DestChn, int type, int len, void* data)
 	return m_err;
 }
 
+// send a command to the destnation
+// @param DestChn	the destnation channel, 0 for reply to last sender, 1 for main
+// @param s			the string data to be sent
+// @return			bytes of data actually sent, positive for success, negtive for error code.
+int MsgQ::SendCmd(int DestChn, string s)
+{
+	return SendMsg(DestChn, MSG_COMMAND, s.length() + 1, (void *)s.c_str());
+}
+
 // get the error message of last operation
 // @return		the error message
 string MsgQ::GetErrorMessage()
@@ -748,3 +849,9 @@ string MsgQ::GetErrorMessage()
 	return m_message;
 }
 
+// get the timestamp of last received message
+// @return 		the time stamp of last received message, it is actually the remain microsecond of the moment the message was sent
+int MsgQ::GetMsgTimestamp()
+{
+	return m_ts;
+}

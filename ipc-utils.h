@@ -11,7 +11,9 @@
 #define MAX_PUBLISHERS 256
 #define MAX_MESSAGECHANNELS 256
 #define MAX_MESSAGELENGTH 1024
+
 #define MSG_NULL 0
+#define MSG_COMMAND 6
 
 using namespace std;
 
@@ -85,72 +87,14 @@ public:
 	ShMem(string title);
 	~ShMem();
 	
-	// publish new data with the publisher
-	// @param PublisherName	the name of the shared element or publisher, 1-15 characters
-	// @param size			the size of the shared element, 0-1024. 0 for string up to 63 characters
-	// @param ptr			the pointer to the data
-	// @return				the publisher ID, positive for success, negtive for error code.
-	//						The publisher ID keeps unchanged for the same publisher name among all processes/threads.
-	int Write(string PublisherName, int size, void* ptr); 
-	
-	// publish new data in integer with the publisher
-	// @param PublisherName	the name of the shared element or publisher, 1-15 characters
-	// @param n				the data in integer to be published
-	// @return				the publisher ID, positive for success, negtive for error code
-	//						The publisher ID keeps unchanged for the same publisher name among all processes/threads.
-	int Write(string PublisherName, int n); 
-
-	// publish new data in double with the publisher
-	// @param PublisherName	the name of the shared element or publisher, 1-15 characters
-	// @param t				the data in double to be published
-	// @return				the publisher ID, positive for success, negtive for error code
-	//						The publisher ID keeps unchanged for the same publisher name among all processes/threads.
-	int Write(string PublisherName, double t); 
-
-	// publish new data in string with the publisher
-	// @param PublisherName	the name of the shared element or publisher, 1-15 characters
-	// @param s				the data in string to be published, 0-63 characters
-	// @return				the publisher ID, positive for success, negtive for error code
-	//						The publisher ID keeps unchanged for the same publisher name among all processes/threads.
-	int Write(string PublisherName, string s); 
-	
-	// Read the shared element
-	// @param PublisherName	the name of the shared element or publisher, 1-15 characters
-	// @param len (out)		the size of the shared element, 0-1024. 0 for string up to 63 characters
-	// @param ptr (out)		the pointer to the data read
-	// @return				the publisher ID, positive for success, negtive for error code
-	//						The publisher ID keeps unchanged for the same publisher name among all processes/threads.
-	int Read(string PublisherName, int* len, void* ptr);
-
-	// Read the shared element in integer
-	// @param PublisherName	the name of the shared element or publisher, 1-15 characters
-	// @param n (out)		the pointer to the integer read
-	// @return				the publisher ID, positive for success, negtive for error code
-	//						The publisher ID keeps unchanged for the same publisher name among all processes/threads.
-	int Read(string PublisherName, int* n);
-	
-	// Read the shared element in double
-	// @param PublisherName	the name of the shared element or publisher, 1-15 characters
-	// @param t (out)		the pointer to the double read
-	// @return				the publisher ID, positive for success, negtive for error code
-	//						The publisher ID keeps unchanged for the same publisher name among all processes/threads.
-	int Read(string PublisherName, double* t);
-
-	// Read the shared element in string
-	// @param PublisherName	the name of the shared element or publisher, 1-15 characters
-	// @param s (out)		the pointer to the string read
-	// @return				the publisher ID, positive for success, negtive for error code
-	//						The publisher ID keeps unchanged for the same publisher name among all processes/threads.
-	int Read(string PublisherName, string* s);
-	
-	// create a publisher for quick publish
+	// create a publisher 
 	// @param PublisherName	the name of the shared element
 	// @param size			the size of the shared element
 	// @return				the publisher ID, positive for success, negtive for error code
 	//						The publisher ID keeps unchanged for the same publisher name among all processes/threads.
 	int CreatePublisher(string PublisherName, int size);
 
-	// subscribe a publisher
+	// subscribe a publisher or get the name by ID
 	// @param PublisherName	the name of the shared element
 	// @return				the publisher ID, positive for success, negtive for error code
 	//						The publisher ID keeps unchanged for the same publisher name among all processes/threads.
@@ -186,6 +130,53 @@ public:
 	// @return				the actual bytes of data read, positive for success, negtive for error code.
 	int Read(int PublisherID, void* ptr);
 
+	// Read the shared element
+	// @param PublisherID	the ID of the shared element or publisher, 1-256
+	// @param n (out)		the pointer to the integer read
+	// @return				the actual bytes of data read, positive for success, negtive for error code.
+	int Read(int PublisherID, int* n);
+
+	// Read the shared element
+	// @param PublisherID	the ID of the shared element or publisher, 1-256
+	// @param t (out)		the pointer to the double read
+	// @return				the actual bytes of data read, positive for success, negtive for error code.
+	int Read(int PublisherID, double* t);
+
+	// Read the shared element
+	// @param PublisherID	the ID of the shared element or publisher, 1-256
+	// @param s (out)		the pointer to the string read
+	// @return				the actual bytes of data read, positive for success, negtive for error code.
+	int Read(int PublisherID, string* s);
+
+	// Read the shared element
+	// @param PublisherName	the name of the shared element or publisher, 1-15 characters
+	// @param len (out)		the size of the shared element, 0-1024. 0 for string up to 63 characters
+	// @param ptr (out)		the pointer to the data read
+	// @return				the publisher ID, positive for success, negtive for error code
+	//						The publisher ID keeps unchanged for the same publisher name among all processes/threads.
+	int Read(string PublisherName, int* len, void* ptr);
+
+	// Read the shared element in integer
+	// @param PublisherName	the name of the shared element or publisher, 1-15 characters
+	// @param n (out)		the pointer to the integer read
+	// @return				the publisher ID, positive for success, negtive for error code
+	//						The publisher ID keeps unchanged for the same publisher name among all processes/threads.
+	int Read(string PublisherName, int* n);
+	
+	// Read the shared element in double
+	// @param PublisherName	the name of the shared element or publisher, 1-15 characters
+	// @param t (out)		the pointer to the double read
+	// @return				the publisher ID, positive for success, negtive for error code
+	//						The publisher ID keeps unchanged for the same publisher name among all processes/threads.
+	int Read(string PublisherName, double* t);
+
+	// Read the shared element in string
+	// @param PublisherName	the name of the shared element or publisher, 1-15 characters
+	// @param s (out)		the pointer to the string read
+	// @return				the publisher ID, positive for success, negtive for error code
+	//						The publisher ID keeps unchanged for the same publisher name among all processes/threads.
+	int Read(string PublisherName, string* s);
+	
 	// get the error message of last operation
 	// @return		the error message
 	string GetErrorMessage();
@@ -194,6 +185,7 @@ protected:
 	shm_header* m_headers; // the header area, each has an offset and a size. [0] is the header of headers
 	char(*m_names)[16];  // the element names area, each name has upto 15 characters
 	void* m_data;	// the data area
+	bool m_publishers[MAX_PUBLISHERS];
 
 	string m_title; // the title of the shared memory
 	int m_fd; // the file
@@ -221,20 +213,6 @@ public:
 	// @return					the sender channel, positive for success, negtive for error code
 	int ReceiveMsg(string* SenderName, int* type, int* len, void* data);
 
-	// send a message to the destnation
-	// @param DestName	the destnation name, empty for reply to the last sender
-	// @param type		the type of the message, for example MSG_COMMAND (6)
-	// @param len		the length of the message net data, can be 0 or positive
-	// @param data		the pointer to the data to be sent, can be NULL in case len is 0
-	// @return			the destnation channel, positive for success, negtive for error code
-	int SendMsg(string DestName, int type, int len, void* data);
-
-	// send a command to the destnation
-	// @param DestName	the destnation name, empty for reply to the last sender
-	// @param n			the integer data to be sent
-	// @return			the destnation channel, positive for success, negtive for error code
-	int SendCmd(string DestName, string s);
-
 	// get the channel of destnation by its name. 
 	// @param DestName	the destnation name, empty for the last sender
 	// @return			the channel of  ID	number greater than 1, 1 is reserved for main, negtive for error code
@@ -253,11 +231,25 @@ public:
 	// @return			bytes of data actually sent, positive for success, negtive for error code.
 	int SendMsg(int DestChn, int type, int len, void* data);
 
+	// send a message to the destnation
+	// @param DestName	the destnation name, empty for reply to the last sender
+	// @param type		the type of the message, for example MSG_COMMAND (6)
+	// @param len		the length of the message net data, can be 0 or positive
+	// @param data		the pointer to the data to be sent, can be NULL in case len is 0
+	// @return			the destnation channel, positive for success, negtive for error code
+	int SendMsg(string DestName, int type, int len, void* data);
+
 	// send a command to the destnation
 	// @param DestChn	the destnation channel, 0 for reply to last sender, 1 for main
 	// @param s			the string data to be sent
 	// @return			bytes of data actually sent, positive for success, negtive for error code.
 	int SendCmd(int DestChn, string s);
+
+	// send a command to the destnation
+	// @param DestName	the destnation name, empty for reply to the last sender
+	// @param n			the integer data to be sent
+	// @return			the destnation channel, positive for success, negtive for error code
+	int SendCmd(string DestName, string s);
 
 	// get the error message of last operation
 	// @return 		the error message of last operation

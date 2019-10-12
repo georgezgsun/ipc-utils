@@ -18,7 +18,6 @@
 #include <string>
 #include <ctime>
 
-#define MSG_COMMAND 6
 #define MSG_ONBOARD 11
 
 using namespace std;
@@ -54,12 +53,10 @@ int main(void)
 	printf("Shared 'GPS-time' to public with id=%d, error message=%s\n\n", sh_time, myShMem.GetErrorMessage().c_str());
 	
 	int ret;
-	//ret = myShMem.Write(sh_position, (void*)& position);
-	ret = myShMem.Write("GPS-position", position);
+	ret = myShMem.Write(sh_position, (void*)& position);
 	printf("Publish 'GPS-position=%s' with size=%d, error message=%s\n", position.c_str(), ret, myShMem.GetErrorMessage().c_str());
 
-	//ret = myShMem.Write(sh_altitute, (void*)& altitute);
-	ret = myShMem.Write("GPS_altitute", altitute);
+	ret = myShMem.Write(sh_altitute, (void*)& altitute);
 	printf("Publish 'GPS-altitute=%f' with size=%d, error message=%s\n", altitute, ret, myShMem.GetErrorMessage().c_str());
 
 	int type;
@@ -81,9 +78,12 @@ int main(void)
 	} while (1);
 	
 	printf("%s\n\n", client.GetErrorMessage().c_str());
-	client.SendMsg("main", MSG_ONBOARD, 0, NULL);
+	client.SendMsg(1, MSG_ONBOARD, 0, NULL);
 	printf("%s\n", client.GetErrorMessage().c_str());
-	client.SendMsg(1, MSG_COMMAND, position.length(), (void*)position.c_str());
+	//client.SendMsg(1, MSG_COMMAND, position.length(), (void*)position.c_str());
+	//client.SendMsg("main", MSG_COMMAND, position.length(), (void*)position.c_str());
+	client.SendCmd("main", "position");
+	client.SendCmd(1, "reload");
 	printf("%s\n", client.GetErrorMessage().c_str());
 
 	for (int i = 0; i < 10; i++)
@@ -92,7 +92,8 @@ int main(void)
 		ret = myShMem.Write(sh_time, (void*)& t);
 		printf("\n[%d]:\nPublished new 'GPS-time=%ld'\nElements\tOriginal data, \tshared data\n", i, t);
 
-		ret = myShMem.Read("GPS-position", &np);
+		//ret = myShMem.Read("GPS-position", &np);
+		ret = myShMem.Read(sh_position, &np);
 		ret = myShMem.Read("GPS-altitute", &na);
 		ret = myShMem.Read(sh_time, (void*)& nt);
 
@@ -107,14 +108,15 @@ int main(void)
 			printf("No message.\n");
 			continue;
 		}
+		int ts = server.GetMsgTimestamp();
 		
 		if (type == MSG_ONBOARD)
 		{
-			printf("The client '%s' is now onboard\n", server.GetChannelName(chn).c_str());
+			printf("The module '%s' is onboard at %dus\n", SenderName.c_str(), ts);
 		}
 		else if (type == MSG_COMMAND)
 		{
-			printf("Get a command from '%s': %s\n", server.GetChannelName(chn).c_str(), buf);
+			printf("Get a command from '%s': len=%d  command=%s\n", server.GetChannelName(chn).c_str(), len, buf);
 		}
 		else if (type < 0)
 		{
