@@ -1,8 +1,8 @@
 /**
- * Simple program demonstrating the use of shared memory and message queue in POSIX systems using ipc-utils library.
+ * Simple program demonstrates the use of ipc-utils library which takes the advantage of POSIX shared memory and message queue.
  *
  * The "publishers" publish data in shared memory.
- * The "subscribers" read the them.
+ * The "subscribers" read them.
  *
  * The "server" listens to the message queue.
  * The "client" sends messages to the server.
@@ -17,10 +17,18 @@
 #include <cstdio>
 #include <string>
 #include <ctime>
+#include <time.h>
 
 #define MSG_ONBOARD 11
 
 using namespace std;
+
+timespec GetEpochTime()
+{
+	timespec tp;
+	clock_gettime(CLOCK_REALTIME_COARSE, &tp);
+	return tp;
+}
 
 int main(void)
 {
@@ -30,6 +38,8 @@ int main(void)
 	double na = 0;
 	time_t t = time(NULL);
 	time_t nt = 0;
+	timespec tp = GetEpochTime();
+	timespec ntp;
 
 	printf("\nStart the tests on shared memory and message queue using ipc-utils library.\n\n");
 
@@ -43,20 +53,20 @@ int main(void)
 	MsgQ client = MsgQ("client", 1000);
 
 	printf("Now create publishers in shared memory.\n");
-	int sh_position = myShMem.CreatePublisher("GPS-position", 0);  // 0 is used for string type
+	int sh_position = myShMem.CreatePublisher("GPS-position", 0);  // demo a publisher in string. 0 is used for string type
 	printf("Shared 'GPS-position' to public with id=%d, error message=%s\n", sh_position, myShMem.GetErrorMessage().c_str());
 
-	int sh_altitute = myShMem.CreatePublisher("GPS-altitute", sizeof(altitute));
+	int sh_altitute = myShMem.CreatePublisher("GPS-altitute", sizeof(altitute));  // demo a publisher in double 
 	printf("Shared 'GPS-altitute' to public with id=%d, error message=%s\n", sh_altitute, myShMem.GetErrorMessage().c_str());
 
-	int sh_time = myShMem.CreatePublisher("GPS-time", sizeof(t));
-	printf("Shared 'GPS-time' to public with id=%d, error message=%s\n\n", sh_time, myShMem.GetErrorMessage().c_str());
+	int sh_time = myShMem.CreatePublisher("GPS-Epoch", sizeof(tp)); // demo a publisher with complex data structure
+	printf("Shared 'GPS-Epoch' to public with id=%d, error message=%s\n\n", sh_time, myShMem.GetErrorMessage().c_str());
 	
 	int ret;
-	ret = myShMem.Write(sh_position, (void*)& position);
+	ret = myShMem.Write(sh_position, &position);
 	printf("Publish 'GPS-position=%s' with size=%d, error message=%s\n", position.c_str(), ret, myShMem.GetErrorMessage().c_str());
 
-	ret = myShMem.Write(sh_altitute, (void*)& altitute);
+	ret = myShMem.Write(sh_altitute, &altitute);
 	printf("Publish 'GPS-altitute=%f' with size=%d, error message=%s\n", altitute, ret, myShMem.GetErrorMessage().c_str());
 
 	int type;
@@ -66,6 +76,7 @@ int main(void)
 	string SenderName;
 	
 	printf("%s\n", server.GetErrorMessage().c_str());
+	printf("Read off messages remain in 'main'\n");
 	do 
 	{
 		chn = server.ReceiveMsg(&SenderName, &type, &len, buf);
@@ -74,32 +85,34 @@ int main(void)
 			printf("No message in main.\n");
 			break;
 		}
-		printf("Get a command from '%s' with type=%d, len=%d %s\n", SenderName.c_str(), type, len, buf);
+		printf("Read a old message from '%s' with type=%d, len=%d %s\n", SenderName.c_str(), type, len, buf);
 	} while (1);
 	
 	printf("%s\n\n", client.GetErrorMessage().c_str());
-	client.SendMsg(1, MSG_ONBOARD, 0, NULL);
+	client.SendMsg(1, MSG_ONBOARD, 0, NULL);  // demo sending message to destination by channel number
 	printf("%s\n", client.GetErrorMessage().c_str());
 	//client.SendMsg(1, MSG_COMMAND, position.length(), (void*)position.c_str());
 	//client.SendMsg("main", MSG_COMMAND, position.length(), (void*)position.c_str());
-	client.SendCmd("main", "position");
+	client.SendCmd("main", "position");  // demo sending message to destination by channel name
 	client.SendCmd(1, "reload");
 	printf("%s\n", client.GetErrorMessage().c_str());
 
 	for (int i = 0; i < 10; i++)
 	{
-		time(&t);
-		ret = myShMem.Write(sh_time, (void*)& t);
-		printf("\n[%d]:\nPublished new 'GPS-time=%ld'\nElements\tOriginal data, \tshared data\n", i, t);
+		//time(&t);
+		tp = GetEpochTime();
+		ret = myShMem.Write(sh_time, &tp);  // demo publish a complex structure of data
+		printf("\n[%d]:\nPublished new 'GPS-time=%ld.%ld'\nElements\tOriginal data, \tshared data\n", i, tp.tv_sec, tp.tv_nsec);
 
 		//ret = myShMem.Read("GPS-position", &np);
 		ret = myShMem.Read(sh_position, &np);
 		ret = myShMem.Read("GPS-altitute", &na);
-		ret = myShMem.Read(sh_time, (void*)& nt);
 
 		printf("GPS-position\t%s\t%s\n", position.c_str(), np.c_str());
 		printf("GPS-altitute\t%f\t%f\n", altitute, na);
-		printf("GPS-epoch\t%ld\t%ld\n", t, nt);
+
+		len = myShMem.Read(sh_time, &ntp);
+		printf("GPS-epoch\t%ld.%ld\t%ld.%ld\n", tp.tv_sec, tp.tv_nsec, ntp.tv_sec, ntp.tv_nsec);
 		
 		// the receiving here is blocking with timeout
 		chn = server.ReceiveMsg(&SenderName, &type, &len, buf);

@@ -3,17 +3,17 @@
 #include <time.h>
 #include <chrono>
 
-ShMem::ShMem()
-{
-	m_data = NULL;
-	m_title = "Roswell";
-	m_fd = -1;
-	m_size = 0;
-	memset(m_publishers, 0, sizeof(m_publishers));
+// ShMem::ShMem()
+// {
+	// m_data = NULL;
+	// m_title = "Roswell";
+	// m_fd = -1;
+	// m_size = 0;
+	// memset(m_publishers, 0, sizeof(m_publishers));
 
-	m_err = 0;
-	m_message = "";
-}
+	// m_err = 0;
+	// m_message = "";
+// }
 
 // Constructor of the shared memory, the name is specified
 ShMem::ShMem(string title)
@@ -31,18 +31,15 @@ ShMem::ShMem(string title)
 		m_title.assign(title);
 	}
 	title = "/" + m_title; // add the / in front of the title
-	//fprintf(stderr, "Using %s as the title to create the shared memory\n", title.c_str());
 
 	// create the shared memory object
 	m_fd = shm_open(title.c_str(), O_CREAT | O_RDWR, 0666);
-	//fprintf(stderr, "The shared memory has an ID of %d, ", m_fd);
 
 	// configure the total size of the shared memory object
 	int size_headers = MAX_PUBLISHERS * sizeof(shm_header);
 	int size_names = MAX_PUBLISHERS * 16;
 	int size_data = 65536;
 	m_size = size_headers + size_names + size_data; // total size of the headers, names, and data
-	//fprintf(stderr, "total size is %d\n", m_size);
 	ftruncate(m_fd, m_size);
 
 	// memory map the shared memory object
@@ -57,13 +54,10 @@ ShMem::ShMem(string title)
 	{
 		memset(base, 0, m_size); // clear the whole shared memory
 		strcpy(m_names[0], m_title.c_str()); // assign the title to be the first ID
-		//fprintf(stderr, "First time initial the shared memory. %d\nClear the memory and assign the title %s, ", 
-		//	m_err, m_names[0]);
 		m_err = strlen(m_names[0]);
-		//fprintf(stderr, "new title length %d\n", m_err);
 	}
 
-	// clear all the publishes
+	// clear the flags of all publishers, no publisher by this instance
 	memset(m_publishers, 0, sizeof(m_publishers));
 
 	m_message.assign(m_names[0]);
@@ -83,16 +77,14 @@ ShMem::~ShMem()
 int ShMem::Read(string PublisherName, int* len, void* ptr)
 {
 	int id = Subscribe(PublisherName);
-	if (id > 0)
+	if (id <= 0)
 	{
-		*len = Read(id, ptr);
-		
-		if (*len < 0)
-		{
-			return *len;
-		}
+		m_err = -1;
+		m_message = "no shuch a publisher: " + PublisherName;
+		return m_err;
 	}
 	
+	*len = Read(id, ptr);
 	return id;
 }
 
@@ -406,7 +398,7 @@ int ShMem::Read(int PublisherID, int* n)
 	size_t size = static_cast<size_t>(m_headers[PublisherID].size);
 	if (size != sizeof(int))
 	{
-		m_err = -1;
+		m_err = -2;
 		m_message = "shared element is not an integer";
 		return m_err;
 	}
@@ -437,7 +429,7 @@ int ShMem::Read(int PublisherID, double* t)
 	size_t size = static_cast<size_t>(m_headers[PublisherID].size);
 	if (size != sizeof(double))
 	{
-		m_err = -1;
+		m_err = -2;
 		m_message = "shared element is not a double";
 		return m_err;
 	}
@@ -467,7 +459,7 @@ int ShMem::Read(int PublisherID, string* s)
 
 	if (static_cast<size_t>(m_headers[PublisherID].size))
 	{
-		m_err = -1;
+		m_err = -2;
 		m_message = "shared element is not a string";
 		return m_err;
 	}
@@ -482,26 +474,26 @@ int ShMem::Read(int PublisherID, string* s)
 
 // get the error message of last operation
 // @return		the error message
-string ShMem::GetErrorMessage()
-{
-	return m_message;
-}
+//string ShMem::GetErrorMessage()
+//{
+//	return m_message;
+//}
 
-MsgQ::MsgQ()
-{
-	memset(&send_buf, 0, sizeof(send_buf));
-	memset(&receive_buf, 0, sizeof(receive_buf));
-	m_myChnName = 0;
-	m_myChn = 0;
-	m_totalChannels = 0;
-	memset(m_Channels, 0, sizeof(m_Channels));
-	memset(m_ChnNames, 0, sizeof(m_ChnNames));
-	m_ts = 0;
-	m_timeout = 10;
+// MsgQ::MsgQ()
+// {
+	// memset(&send_buf, 0, sizeof(send_buf));
+	// memset(&receive_buf, 0, sizeof(receive_buf));
+	// m_myChnName = 0;
+	// m_myChn = 0;
+	// m_totalChannels = 0;
+	// memset(m_Channels, 0, sizeof(m_Channels));
+	// memset(m_ChnNames, 0, sizeof(m_ChnNames));
+	// m_ts = 0;
+	// m_timeout = 10;
 
-	m_err = 0;
-	m_message = "";
-}
+	// m_err = 0;
+	// m_message = "";
+// }
 
 // open new a channel for messages receiving
 // @param	my_chn_name	the name of my channel, 1-8 characters
@@ -642,10 +634,13 @@ int MsgQ::ReceiveMsg(string* SenderName, int* type, int* len, void* data)
 {
 	*len = 0;
 	timespec timeout;
-	uint64_t usec = m_timeout;
-	usec += chrono::duration_cast<chrono::microseconds>(chrono::high_resolution_clock::now().time_since_epoch()).count();
-	timeout.tv_sec = usec / 1000000L;
-	timeout.tv_nsec = (usec - timeout.tv_sec * 1000000L) * 1000;
+	clock_gettime(CLOCK_REALTIME_COARSE, &timeout);
+	timeout.tv_nsec += m_timeout * 1000L; // add the timeout in microsecond
+	while (timeout.tv_nsec >= 1000000000L)  // adjust the sec and nano seconds, make it compatible timeout > 1s
+	{
+		timeout.tv_sec++;
+		timeout.tv_nsec -= 1000000000L;
+	}
 
 	// read the message queue
 	m_err = mq_timedreceive(m_myChn, (char *)&receive_buf, 8192, 0, &timeout);
@@ -690,8 +685,8 @@ int MsgQ::ReceiveMsg(string* SenderName, int* type, int* len, void* data)
 	*type = receive_buf.type;
 	memcpy(data, receive_buf.buf, receive_buf.len);
 
-	usec = timeout.tv_nsec / 1000;
-	usec = m_ts > usec ? 1000000L + usec - m_ts : usec -m_ts;
+	// usec = timeout.tv_nsec / 1000;
+	// usec = m_ts > usec ? 1000000L + usec - m_ts : usec -m_ts;
 
 	for (int i = 1; i < m_totalChannels + 1; i++)
 	{
@@ -773,16 +768,15 @@ int MsgQ::SendMsg(int DestChn, int type, int len, void* data)
 	
 	// calculate the time stamp and the timeout
 	timespec timeout;
-	uint64_t usec = chrono::duration_cast<chrono::microseconds>(chrono::high_resolution_clock::now().time_since_epoch()).count();
-	timeout.tv_sec = usec / 1000000L;  //convert into second
-	send_buf.ts = usec - timeout.tv_sec * 1000000L;  // get the remaining microseconds 
-	timeout.tv_nsec = send_buf.ts + 1000; // +1ms for sending timeout
-	if (timeout.tv_nsec >= 1000000L)
+	clock_gettime(CLOCK_REALTIME_COARSE, &timeout);
+
+	send_buf.ts = timeout.tv_nsec / 1000; // the time stamp is the microseconds
+	timeout.tv_nsec += 1000000L; // +1ms for sending timeout
+	if (timeout.tv_nsec >= 1000000000L)
 	{
 		timeout.tv_sec++;
-		timeout.tv_nsec -= 1000;
+		timeout.tv_nsec -= 1000000L;
 	}
-	timeout.tv_nsec *= 1000; // convert into nanoseconds
 
 	send_buf.name = m_myChnName;
 	send_buf.type = type;
@@ -840,18 +834,4 @@ int MsgQ::SendMsg(int DestChn, int type, int len, void* data)
 int MsgQ::SendCmd(int DestChn, string s)
 {
 	return SendMsg(DestChn, MSG_COMMAND, s.length() + 1, (void *)s.c_str());
-}
-
-// get the error message of last operation
-// @return		the error message
-string MsgQ::GetErrorMessage()
-{
-	return m_message;
-}
-
-// get the timestamp of last received message
-// @return 		the time stamp of last received message, it is actually the remain microsecond of the moment the message was sent
-int MsgQ::GetMsgTimestamp()
-{
-	return m_ts;
 }
