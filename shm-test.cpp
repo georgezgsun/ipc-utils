@@ -36,8 +36,8 @@ int main(void)
 	string np = "";
 	double altitute = 195.0;
 	double na = 0;
-	time_t t = time(NULL);
-	time_t nt = 0;
+	// time_t t = time(NULL);
+	// time_t nt = 0;
 	timespec tp = GetEpochTime();
 	timespec ntp;
 
@@ -112,7 +112,8 @@ int main(void)
 		printf("GPS-altitute\t%f\t%f\n", altitute, na);
 
 		len = myShMem.Read(sh_time, &ntp);
-		printf("GPS-epoch\t%ld.%ld\t%ld.%ld\n", tp.tv_sec, tp.tv_nsec, ntp.tv_sec, ntp.tv_nsec);
+		//printf("GPS-epoch\t%ld.%ld\t%ld.%ld\n", tp.tv_sec, tp.tv_nsec, ntp.tv_sec, ntp.tv_nsec);
+		printf("GPS-epoch\t%s\t%s\n", GetDateTime(tp.tv_sec, tp.tv_nsec).c_str(), GetDateTime(ntp.tv_sec, ntp.tv_nsec).c_str());
 		
 		// the receiving here is blocking with timeout
 		chn = server.ReceiveMsg(&SenderName, &type, &len, buf);

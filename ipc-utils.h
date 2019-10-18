@@ -15,6 +15,14 @@
 
 #define MSG_NULL 0
 #define MSG_COMMAND 6
+#define MSG_ONBOARD 11
+#define MSG_LOG 12
+#define MSG_WATCHDOG 12
+#define MSG_DOWN 13
+#define MSG_STOP 14
+#define MSG_QUERY 15
+#define MSG_UPDATE 16
+#define MSG_DATA 17
 
 using namespace std;
 
@@ -275,3 +283,5 @@ protected:
 	int m_err = 0;
 	string m_message = "";
 };
+
+string GetDateTime(time_t sec, time_t usec);

@@ -3,18 +3,6 @@
 #include <time.h>
 #include <chrono>
 
-// ShMem::ShMem()
-// {
-	// m_data = NULL;
-	// m_title = "Roswell";
-	// m_fd = -1;
-	// m_size = 0;
-	// memset(m_publishers, 0, sizeof(m_publishers));
-
-	// m_err = 0;
-	// m_message = "";
-// }
-
 // Constructor of the shared memory, the name is specified
 ShMem::ShMem(string title)
 {
@@ -472,29 +460,6 @@ int ShMem::Read(int PublisherID, string* s)
 	return m_err;
 }
 
-// get the error message of last operation
-// @return		the error message
-//string ShMem::GetErrorMessage()
-//{
-//	return m_message;
-//}
-
-// MsgQ::MsgQ()
-// {
-	// memset(&send_buf, 0, sizeof(send_buf));
-	// memset(&receive_buf, 0, sizeof(receive_buf));
-	// m_myChnName = 0;
-	// m_myChn = 0;
-	// m_totalChannels = 0;
-	// memset(m_Channels, 0, sizeof(m_Channels));
-	// memset(m_ChnNames, 0, sizeof(m_ChnNames));
-	// m_ts = 0;
-	// m_timeout = 10;
-
-	// m_err = 0;
-	// m_message = "";
-// }
-
 // open new a channel for messages receiving
 // @param	my_chn_name	the name of my channel, 1-8 characters
 // @param	timeout_usec	timeout in microseconds, 10-1,000,000
@@ -683,10 +648,12 @@ int MsgQ::ReceiveMsg(string* SenderName, int* type, int* len, void* data)
 	m_ts = receive_buf.ts;
 	*len = receive_buf.len;
 	*type = receive_buf.type;
-	memcpy(data, receive_buf.buf, receive_buf.len);
-
-	// usec = timeout.tv_nsec / 1000;
-	// usec = m_ts > usec ? 1000000L + usec - m_ts : usec -m_ts;
+	
+	// check not copy to itself
+	if (data != receive_buf.buf)
+	{
+		memcpy(data, receive_buf.buf, receive_buf.len);
+	}
 
 	for (int i = 1; i < m_totalChannels + 1; i++)
 	{
@@ -781,8 +748,13 @@ int MsgQ::SendMsg(int DestChn, int type, int len, void* data)
 	send_buf.name = m_myChnName;
 	send_buf.type = type;
 	send_buf.len = len;
-	printf("%d: (name=%ld, ts=%d, type=%d, len=%d) \n", len, send_buf.name, send_buf.ts, send_buf.type, send_buf.len);
-	memcpy(send_buf.buf, data, len);
+	// printf("%d: (name=%ld, ts=%d, type=%d, len=%d) \n", len, send_buf.name, send_buf.ts, send_buf.type, send_buf.len);
+	
+	// make the memory copy only when they are not the same
+	if (send_buf.buf != data)
+	{
+		memcpy(send_buf.buf, data, len);
+	}
 	len += sizeof(send_buf) - MAX_MESSAGELENGTH;
 
 	m_err = mq_timedsend(m_Channels[DestChn], (const char*)&send_buf, len, 0, &timeout);
@@ -821,9 +793,10 @@ int MsgQ::SendMsg(int DestChn, int type, int len, void* data)
 	}
 
 	m_err = len;
-	m_message = "message (type=" + to_string(send_buf.type) + ", len=" + to_string(send_buf.len) + ") was sent to ";
-	m_message.append((char*)(m_ChnNames + DestChn));
-	m_message.append(" at channel " + to_string(m_Channels[DestChn]) + " with size=" + to_string(len));
+	m_message = "message sent";
+	// m_message = "message (type=" + to_string(send_buf.type) + ", len=" + to_string(send_buf.len) + ") was sent to ";
+	// m_message.append((char*)(m_ChnNames + DestChn));
+	// m_message.append(" at channel " + to_string(m_Channels[DestChn]) + " with size=" + to_string(len));
 	return m_err;
 }
 
@@ -834,4 +807,15 @@ int MsgQ::SendMsg(int DestChn, int type, int len, void* data)
 int MsgQ::SendCmd(int DestChn, string s)
 {
 	return SendMsg(DestChn, MSG_COMMAND, s.length() + 1, (void *)s.c_str());
+}
+
+string GetDateTime(time_t sec, time_t usec)
+{
+	struct tm *nowtm;
+	char tmbuf[64];
+	char buf[64];
+	nowtm = localtime(&sec);
+	strftime(tmbuf, sizeof tmbuf, "%Y-%m-%d %H:%M:%S", nowtm);
+	snprintf(buf, sizeof buf, "%s.%06ld", tmbuf, usec);
+	return buf;
 }
