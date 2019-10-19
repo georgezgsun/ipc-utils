@@ -282,6 +282,11 @@ protected:
 
 	int m_err = 0;
 	string m_message = "";
+
+	// clear a message queue
+	// @param DestName	the destnation name, empty for my channel name
+	// @return 			0 on success, negtive for error code
+	int ClearQueue(string DestName = "");
 };
 
 string GetDateTime(time_t sec, time_t usec);

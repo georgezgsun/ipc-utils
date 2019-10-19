@@ -809,6 +809,52 @@ int MsgQ::SendCmd(int DestChn, string s)
 	return SendMsg(DestChn, MSG_COMMAND, s.length() + 1, (void *)s.c_str());
 }
 
+// clear a message queue
+// @param DestName	the destnation name, empty for my channel name
+// @return 		0 on success, negtive for error code
+int MsgQ::ClearQueue(string DestName)
+{
+	m_message.clear();
+	if (DestName.empty())
+	{
+		DestName = m_myChnName;
+	}
+	DestName = "/" + DestName;
+	
+	mqd_t Chn = mq_open(DestName.c_str(), O_RDONLY | O_NONBLOCK);
+	if (Chn < 0)
+	{
+		m_err = -1;
+
+		if (errno == EACCES)
+		{
+			m_message = "Access denied";
+		}
+		else if (errno == EMFILE || errno == ENFILE)
+		{
+			m_message = "Too many message queue opened";
+		}
+		else if (errno == ENAMETOOLONG)
+		{
+			m_message = "name was too long";
+		}
+		else if (errno == ENOENT)
+		{
+			m_message = "no queue with this name exists";
+			m_err = 0;
+		}
+
+		return m_err;
+	}
+	
+	do
+	{
+		m_err = mq_receive(Chn, (char *)&receive_buf, 8192, 0);
+	} while (m_err > 0);
+	
+	return mq_close(Chn);
+}
+
 string GetDateTime(time_t sec, time_t usec)
 {
 	struct tm *nowtm;
